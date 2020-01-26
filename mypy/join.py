@@ -177,6 +177,8 @@ class TypeJoinVisitor(TypeVisitor[ProperType]):
             return join_types(t, self.s)
         elif isinstance(self.s, TypedDictType):
             return join_types(t, self.s)
+        elif isinstance(self.s, TupleType):
+            return join_types(t, self.s)
         elif isinstance(self.s, LiteralType):
             return join_types(t, self.s)
         else:
@@ -260,12 +262,12 @@ class TypeJoinVisitor(TypeVisitor[ProperType]):
         return join_types(t.fallback, s)
 
     def visit_tuple_type(self, t: TupleType) -> ProperType:
-        # When given two fixed-length tuples:
-        # * If lengths match, join their subtypes item-wise:
+        # * If fixed-length tuple lengths match, join their subtypes item-wise:
         #   Tuple[int, bool] + Tuple[bool, bool] becomes Tuple[int, bool]
-        # * If lengths do not match, return a variadic tuple:
+        # * If fixed-length tuple lengths do not match, return a variadic tuple:
         #   Tuple[bool, int] + Tuple[bool] becomes Tuple[int, ...]
-        # * Fixed tuple + variadic tuple is currently not implemented.
+        # * When joining fixed-length and variadic tuple, also return variadic:
+        #   Tuple[int] + Tuple[bool, ...] becomes Tuple[int, ...]
         if isinstance(self.s, TupleType):
             fallback = join_instances(mypy.typeops.tuple_fallback(self.s),
                                       mypy.typeops.tuple_fallback(t))
@@ -278,7 +280,7 @@ class TypeJoinVisitor(TypeVisitor[ProperType]):
             else:
                 return fallback
         else:
-            return self.default(self.s)
+            return join_types(self.s, mypy.typeops.tuple_fallback(t))
 
     def visit_typeddict_type(self, t: TypedDictType) -> ProperType:
         if isinstance(self.s, TypedDictType):
