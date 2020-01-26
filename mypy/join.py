@@ -260,14 +260,23 @@ class TypeJoinVisitor(TypeVisitor[ProperType]):
         return join_types(t.fallback, s)
 
     def visit_tuple_type(self, t: TupleType) -> ProperType:
-        if isinstance(self.s, TupleType) and self.s.length() == t.length():
-            items = []  # type: List[Type]
-            for i in range(t.length()):
-                items.append(self.join(t.items[i], self.s.items[i]))
+        # When given two fixed-length tuples:
+        # * If lengths match, join their subtypes item-wise:
+        #   Tuple[int, bool] + Tuple[bool, bool] becomes Tuple[int, bool]
+        # * If lengths do not match, return a variadic tuple:
+        #   Tuple[bool, int] + Tuple[bool] becomes Tuple[int, ...]
+        # * Fixed tuple + variadic tuple is currently not implemented.
+        if isinstance(self.s, TupleType):
             fallback = join_instances(mypy.typeops.tuple_fallback(self.s),
                                       mypy.typeops.tuple_fallback(t))
             assert isinstance(fallback, Instance)
-            return TupleType(items, fallback)
+            if self.s.length() == t.length():
+                items = []  # type: List[Type]
+                for i in range(t.length()):
+                    items.append(self.join(t.items[i], self.s.items[i]))
+                return TupleType(items, fallback)
+            else:
+                return fallback
         else:
             return self.default(self.s)
 
